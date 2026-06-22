@@ -39,7 +39,7 @@ DATA_PATH = PROJECT_ROOT / "data" / "processed" / "cleaned_events.parquet"
 MODEL_DIR = PROJECT_ROOT / "backend" / "app" / "ml"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "outputs"
 
-def train_duration_model() -> None:
+def train_duration_model(model_dir: Path = MODEL_DIR) -> None:
     print(f"Loading cleaned single-day events from {DATA_PATH}...")
     if not DATA_PATH.exists():
         raise FileNotFoundError(
@@ -174,8 +174,8 @@ def train_duration_model() -> None:
     )
 
     # Save final model
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    model_save_path = MODEL_DIR / "duration_model_single_day.pkl"
+    model_dir.mkdir(parents=True, exist_ok=True)
+    model_save_path = model_dir / "duration_model_single_day.pkl"
     joblib.dump(final_model, model_save_path)
     print(f"Saved final model to {model_save_path}")
 

@@ -65,7 +65,8 @@ def get_recommendation(event_id: str, db: Session = Depends(get_db)):
 
     recs = generate_recommendation(
         event=event_dict,
-        predicted_disruption_class=disruption_class
+        predicted_disruption_class=disruption_class,
+        db_session=db
     )
 
     return recs

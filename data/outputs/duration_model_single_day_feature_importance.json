@@ -1,10 +1,10 @@
 {
-  "corridor_event_rate": 101139238.11914062,
-  "hour_sin": 59936593.1771698,
-  "hour_cos": 27699538.22277832,
-  "day_of_week": 26353212.518069267,
-  "requires_road_closure": 21134169.7109375,
-  "corridor": 1995859.2021484375,
-  "event_cause": 94275.09765625,
+  "corridor_event_rate": 72158850.81101704,
+  "hour_sin": 51955051.15167236,
+  "corridor": 38407850.00390625,
+  "hour_cos": 35040628.824920654,
+  "day_of_week": 30833065.860845566,
+  "requires_road_closure": 22413420.638061523,
+  "event_cause": 557634.8046875,
   "is_weekend": 0.0
 }

@@ -10,6 +10,7 @@ from backend.app.models.event import Event
 from backend.app.models.prediction import Prediction
 from backend.app.models.outcome import Outcome
 from backend.app.models.recalibration import RecalibrationLog
+from backend.app.models.severity_recalibration import SeverityRecalibrationLog
 
 logger = logging.getLogger(__name__)
 
@@ -44,46 +45,54 @@ def get_bias_at_time(db_session: Session, event_cause: str, corridor: str, times
 def recalibrate(db_session: Session, event_cause: str, corridor: str, predicted_value: float, actual_value: float) -> dict:
     """
     Called after a new outcome is logged (from the /outcomes endpoint).
+    Works for both planned and unplanned events sharing the same (event_cause, corridor) bucket.
     """
-    # 1. Fetch all outcomes logged so far for this exact (event_cause, corridor) bucket,
-    # joined against their corresponding predictions, to get the full history of
-    # (predicted, actual, predicted_at) pairs for this bucket.
-    results = db_session.query(
-        Outcome.actual_duration_min,
-        Prediction.predicted_duration_min,
-        Prediction.predicted_at
-    ).join(
-        Prediction, Outcome.event_id == Prediction.event_id
+    # 1. Fetch all outcomes logged so far for this (event_cause, corridor) bucket — no event_type filter.
+    outcomes = db_session.query(
+        Outcome.event_id,
+        Outcome.actual_duration_min
     ).join(
         Event, Outcome.event_id == Event.event_id
     ).filter(
         Event.event_cause == event_cause,
         Event.corridor == corridor,
-        Event.event_type == "planned",
-        Outcome.actual_duration_min.isnot(None),
-        Prediction.predicted_duration_min.isnot(None)
+        Outcome.actual_duration_min.isnot(None)
     ).all()
 
-    # 2. Get the CURRENT bias correction
+    # n_outcomes_used = total outcomes logged for this bucket (the "proof of learning" counter).
+    n_outcomes_used = len(outcomes)
+
+    # 2. For the bias math, look up the latest prediction per outcome where one exists
+    # (unplanned events get disruption_class predictions with NULL predicted_duration_min,
+    # so they contribute to the count but not to the numeric bias average).
+    matched_results = []
+    for event_id, actual in outcomes:
+        pred = db_session.query(
+            Prediction.predicted_duration_min,
+            Prediction.predicted_at
+        ).filter(
+            Prediction.event_id == event_id,
+            Prediction.predicted_duration_min.isnot(None)
+        ).order_by(Prediction.predicted_at.desc()).first()
+        if pred:
+            matched_results.append((actual, pred.predicted_duration_min, pred.predicted_at))
+
+    # 3. Get the CURRENT bias correction
     old_bias_correction = get_bias_correction(db_session, event_cause, corridor)
 
-    # 3. Compute new_bias_correction as the simple mean of (actual - raw_predicted) across ALL
-    # outcomes for this bucket (including the one just logged).
-    # We reconstruct the raw prediction by subtracting the bias active when that prediction was made.
-    n_outcomes_used = len(results)
-    if n_outcomes_used > 0:
+    # 4. Compute new_bias_correction as the mean of (actual - raw_predicted) over matched rows.
+    if matched_results:
         errors = []
-        for actual, pred_corrected, pred_at in results:
+        for actual, pred_corrected, pred_at in matched_results:
             bias_active = get_bias_at_time(db_session, event_cause, corridor, pred_at)
             raw_prediction = pred_corrected - bias_active
             errors.append(actual - raw_prediction)
-        new_bias_correction = float(sum(errors) / n_outcomes_used)
+        new_bias_correction = float(sum(errors) / len(errors))
     else:
-        # Fallback if no outcomes found in DB query yet (e.g. session not flushed)
-        new_bias_correction = actual_value - predicted_value
-        n_outcomes_used = 1
+        # Fallback: no predictions found (e.g. purely unplanned bucket) — keep existing bias.
+        new_bias_correction = actual_value - predicted_value if predicted_value else old_bias_correction
 
-    # 4. Insert a new row into recalibration_log
+    # 5. Insert a new row into recalibration_log
     new_log = RecalibrationLog(
         event_cause=event_cause,
         corridor=corridor,
@@ -99,7 +108,7 @@ def recalibrate(db_session: Session, event_cause: str, corridor: str, predicted_
     # Future retrain note: A full LightGBM model retrain on historical data is a future/production
     # enhancement. For the live demo, this running bias-correction average is used instead.
 
-    # 5. Return the inserted row as a dict
+    # 6. Return the inserted row as a dict
     return {
         "recal_id": new_log.recal_id,
         "event_cause": new_log.event_cause,
@@ -116,4 +125,60 @@ def apply_bias_correction(raw_prediction: float, event_cause: str, corridor: str
     """
     bias = get_bias_correction(db_session, event_cause, corridor)
     return max(0.0, raw_prediction + bias)
+
+
+def calculate_severity_weights(db_session: Session, event_cause: str, corridor: str) -> dict:
+    """
+    Recalibration Algorithm: calculate historical misclassification rate.
+    Compares the actual_disruption_class frequency against predicted_disruption_class frequency
+    to calculate a weight adjustment vector W with learning rate alpha = 0.2.
+    """
+    # Fetch recent outcomes for the specific cause and corridor
+    outcomes = db_session.query(Outcome).join(Event, Outcome.event_id == Event.event_id).filter(
+        Event.event_cause == event_cause,
+        Event.corridor == corridor,
+        Outcome.actual_disruption_class.isnot(None)
+    ).all()
+
+    class_names = ["Low", "Medium", "High", "Critical"]
+    weights = {c: 0.0 for c in class_names}
+
+    if not outcomes:
+        return weights
+
+    actual_counts = {c: 0 for c in class_names}
+    pred_counts = {c: 0 for c in class_names}
+    matched_count = 0
+
+    for outcome in outcomes:
+        # Get the latest prediction for this event
+        pred = db_session.query(Prediction).filter(
+            Prediction.event_id == outcome.event_id,
+            Prediction.predicted_disruption_class.isnot(None)
+        ).order_by(Prediction.predicted_at.desc()).first()
+
+        if pred:
+            actual_counts[outcome.actual_disruption_class] += 1
+            pred_counts[pred.predicted_disruption_class] += 1
+            matched_count += 1
+
+    if matched_count > 0:
+        alpha = 0.2
+        for c in class_names:
+            f_actual = actual_counts[c] / matched_count
+            f_pred = pred_counts[c] / matched_count
+            weights[c] = float(alpha * (f_actual - f_pred))
+
+    new_log = SeverityRecalibrationLog(
+        event_cause=event_cause,
+        corridor=corridor,
+        class_weights=weights,
+        n_outcomes_used=len(outcomes),
+        recalibrated_at=datetime.utcnow()
+    )
+    db_session.add(new_log)
+    db_session.commit()
+    db_session.refresh(new_log)
+
+    return weights
 

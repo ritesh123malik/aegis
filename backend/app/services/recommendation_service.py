@@ -10,7 +10,13 @@ logged.
 
 import logging
 import math
+import requests
+import os
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 from backend.app.services import osm_service
+from backend.app.models.outcome import Outcome
+from backend.app.models.event import Event
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +68,37 @@ def calculate_officer_count(disruption_class: str, requires_road_closure: bool, 
     adjustment = 2 if requires_road_closure else 0
     adjustment += 1 if event_cause in CROWD_CONTROL_CAUSES else 0
     return base + adjustment
+
+
+def calculate_baseline_officer_count(event_cause: str, db_session: Session, disruption_class: str = "Medium") -> tuple[int, int]:
+    """
+    Naive baseline: average actual_officers_deployed historically logged for this event_cause.
+    Returns a tuple of (baseline_officer_count, number_of_logged_outcomes).
+    """
+    if not db_session:
+        base = BASE_OFFICERS_LOOKUP.get(disruption_class, 4)
+        return int(base), 0
+
+    # Query for the average and count, safely joining with Event to check event_cause
+    result = db_session.query(
+        func.avg(Outcome.actual_officers_deployed),
+        func.count(Outcome.outcome_id)
+    ).join(
+        Event, Outcome.event_id == Event.event_id
+    ).filter(
+        Event.event_cause == event_cause,
+        Outcome.actual_officers_deployed.isnot(None)
+    ).first()
+
+    avg_officers, count = result
+
+    # Zero-division/No-data safety check -> triggers the critical constraint fallback
+    if count == 0 or avg_officers is None:
+        base = BASE_OFFICERS_LOOKUP.get(disruption_class, 4)
+        return int(base), 0
+
+    # Round to nearest integer to avoid the "half-an-officer" problem
+    return int(round(avg_officers)), count
 
 
 def get_barricade_locations(corridor: str, event_lat: float, event_lon: float, disruption_class: str) -> list[dict]:
@@ -153,7 +190,7 @@ def get_signals_requiring_attention(corridor: str, event_lat: float, event_lon: 
     return affected
 
 
-def generate_recommendation(event: dict, predicted_disruption_class: str) -> dict:
+def generate_recommendation(event: dict, predicted_disruption_class: str, db_session: Session = None) -> dict:
     """
     Main orchestrator for Aegis Traffic Management recommendation engine.
     """
@@ -168,13 +205,42 @@ def generate_recommendation(event: dict, predicted_disruption_class: str) -> dic
     # Calculate recommended officers
     officers = calculate_officer_count(disruption_class, requires_road_closure, event_cause)
     
+    # Build adjustment breakdown string
+    base_val = BASE_OFFICERS_LOOKUP.get(disruption_class, 4)
+    parts = [f"{disruption_class} disruption (base {base_val})"]
+    if requires_road_closure:
+        parts.append("road closure required (+2)")
+    if event_cause in CROWD_CONTROL_CAUSES:
+        parts.append("crowd control required (+1)")
+    officer_count_reason = " + ".join(parts) + f" = {officers}"
+    
+    # Calculate baseline
+    baseline_officers, outcome_count = calculate_baseline_officer_count(
+        event_cause=event_cause,
+        db_session=db_session,
+        disruption_class=disruption_class
+    )
+    
+    if outcome_count == 0:
+        baseline_source = "no logged outcomes for this cause yet — using static base lookup"
+    else:
+        baseline_source = f"average of {outcome_count} logged outcomes for this cause"
+        
+    baseline_comparison = {
+        "naive_baseline_officers": baseline_officers,
+        "our_recommendation_officers": officers,
+        "adjustment_breakdown": officer_count_reason,
+        "baseline_source": baseline_source
+    }
+    
     # If coordinates are missing or it is Non-corridor, return fallback defaults safely
     if event_lat is None or event_lon is None or corridor == "Non-corridor":
         return {
             "recommended_officers": officers,
             "recommended_barricades": [],
             "recommended_diversions": [],
-            "signals_requiring_attention": []
+            "signals_requiring_attention": [],
+            "baseline_comparison": baseline_comparison
         }
         
     # Generate recommendations using OSM cache
@@ -182,10 +248,68 @@ def generate_recommendation(event: dict, predicted_disruption_class: str) -> dic
     diversions = get_diversion_routes(corridor, event_lat, event_lon, radius_km=1.0)
     signals = get_signals_requiring_attention(corridor, event_lat, event_lon, disruption_class)
     
+    # If requires_road_closure is True, get dynamic exclusion route from Valhalla
+    if requires_road_closure and event_lat is not None and event_lon is not None and corridor != "Non-corridor":
+        routes = osm_service.get_cached_routes(corridor)
+        if routes:
+            start_lat, start_lon = routes[0]["polyline"][0]
+            end_lat, end_lon = routes[0]["polyline"][-1]
+            valhalla_res = get_dynamic_diversion_routes(
+                start_lat=start_lat,
+                start_lon=start_lon,
+                end_lat=end_lat,
+                end_lon=end_lon,
+                event_lat=event_lat,
+                event_lon=event_lon,
+                requires_closure=True
+            )
+            if valhalla_res and "route_polyline" in valhalla_res:
+                diversions = [
+                    {
+                        "polyline": valhalla_res["route_polyline"],
+                        "description": "Valhalla Dynamic Exclusion Route"
+                    }
+                ]
+    
     return {
         "recommended_officers": officers,
         "recommended_barricades": barricades,
         "recommended_diversions": diversions,
-        "signals_requiring_attention": signals
+        "signals_requiring_attention": signals,
+        "baseline_comparison": baseline_comparison
     }
+
+
+VALHALLA_URL = os.getenv("VALHALLA_URL", "http://localhost:8002/route")
+
+def get_dynamic_diversion_routes(start_lat: float, start_lon: float, end_lat: float, end_lon: float, event_lat: float, event_lon: float, requires_closure: bool) -> dict:
+    """
+    Query Valhalla dynamic routing engine with polygon/location avoidance rules.
+    """
+    payload = {
+        "locations": [
+            {"lat": start_lat, "lon": start_lon},
+            {"lat": end_lat, "lon": end_lon}
+        ],
+        "costing": "auto"
+    }
+
+    if requires_closure:
+        # Define a 50-meter avoidance radius around the event
+        payload["avoid_locations"] = [
+            {"lat": event_lat, "lon": event_lon, "radius": 50}
+        ]
+
+    try:
+        response = requests.post(VALHALLA_URL, json=payload, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "route_polyline": data["trip"]["legs"][0]["shape"],
+                "distance_km": data["trip"]["summary"]["length"]
+            }
+    except Exception as e:
+        logger.warning(f"Failed to query Valhalla routing: {e}")
+        
+    return {}
 

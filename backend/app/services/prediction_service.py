@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from backend.app.models.event import Event
 from backend.app.models.recalibration import RecalibrationLog
+from backend.app.models.severity_recalibration import SeverityRecalibrationLog
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]  # aegis root
 
@@ -32,6 +33,27 @@ def get_severity_model():
             raise FileNotFoundError(f"Severity model not found at {SEVERITY_MODEL_PATH}")
         _models["severity"] = joblib.load(SEVERITY_MODEL_PATH)
     return _models["severity"]
+
+
+def apply_severity_probability_shift(raw_proba: np.ndarray, weights: dict, class_names: list) -> tuple[str, float]:
+    weight_vector = np.array([weights.get(cls, 0.0) for cls in class_names])
+    
+    # Apply shift and ReLU (max with 0)
+    adjusted_proba = np.maximum(0.0, raw_proba + weight_vector)
+    
+    # L1 Normalization so probabilities sum to 1.0
+    sum_proba = np.sum(adjusted_proba)
+    if sum_proba > 0:
+        adjusted_proba = adjusted_proba / sum_proba
+    else:
+        # Fallback if all adjusted probabilities are zero
+        adjusted_proba = raw_proba
+    
+    final_class_idx = int(np.argmax(adjusted_proba))
+    final_class = class_names[final_class_idx]
+    final_confidence = float(adjusted_proba[final_class_idx])
+    
+    return final_class, final_confidence
 
 def get_corridor_event_rate(db: Session, corridor: str, event_cause: str) -> float:
     # Numerator: Count of historical events in db for this corridor and event_cause
@@ -70,30 +92,43 @@ def predict_event(db: Session, event: Event) -> dict:
 
 
 
-    # Check for historical event volume (confidence warning threshold)
-    n_historical = db.query(func.count(Event.event_id)).filter(
-        Event.corridor == corridor,
-        Event.event_cause == event_cause
-    ).scalar() or 0
-
-    if n_historical < 5:
-        confidence_score = LOW_DATA_CONFIDENCE
-        low_data_warning = True
-        warning_msg = "Low historical data for this event type on this corridor — using citywide average confidence."
-    else:
-        confidence_score = DEFAULT_CONFIDENCE
-        low_data_warning = False
-        warning_msg = None
-
     prediction_result = {
-        "confidence_score": confidence_score,
-        "low_data_warning": low_data_warning,
-        "warning_message": warning_msg,
+        "confidence_score": 0.0,
+        "low_data_warning": False,
+        "warning_message": None,
         "predicted_duration_min": None,
         "predicted_disruption_class": None,
     }
 
     if event.event_type == "planned":
+        n_exact = db.query(func.count(Event.event_id)).filter(
+            Event.corridor == corridor,
+            Event.event_cause == event_cause,
+            Event.event_type == "planned",
+            Event.event_id != event.event_id
+        ).scalar() or 0
+
+        # Also find n_cause (planned rows for this cause citywide)
+        n_cause = db.query(func.count(Event.event_id)).filter(
+            Event.event_cause == event_cause,
+            Event.event_type == "planned"
+        ).scalar() or 0
+
+        # 2. Heuristic confidence scaling based on n_exact:
+        # - 0 examples -> 0.3
+        # - 5+ examples -> 0.95
+        confidence_score = float(np.clip(0.3 + 0.13 * min(n_exact, 5), 0.3, 0.95))
+        low_data_warning = n_exact < 5
+        warning_msg = (
+            "Low historical data for this event type on this corridor — using citywide average confidence."
+            if low_data_warning
+            else None
+        )
+
+        prediction_result["confidence_score"] = confidence_score
+        prediction_result["low_data_warning"] = low_data_warning
+        prediction_result["warning_message"] = warning_msg
+
         # Load planned duration model
         model = get_duration_model()
 
@@ -120,13 +155,30 @@ def predict_event(db: Session, event: Event) -> dict:
         prediction_result["predicted_duration_min"] = max(0.0, raw_pred)
 
     else:  # event_type == "unplanned" (or fallback)
+        n_exact = db.query(func.count(Event.event_id)).filter(
+            Event.corridor == corridor,
+            Event.event_cause == event_cause,
+            Event.event_type == "unplanned",
+            Event.event_id != event.event_id
+        ).scalar() or 0
+
+        low_data_warning = n_exact < 5
+        warning_msg = (
+            "Low historical data for this event type on this corridor — using citywide average confidence."
+            if low_data_warning
+            else None
+        )
+
+        prediction_result["low_data_warning"] = low_data_warning
+        prediction_result["warning_message"] = warning_msg
+
         # Load severity classifier model
         model = get_severity_model()
 
-        # Features order: corridor, event_cause, hour_sin, hour_cos, day_of_week, is_weekend, month
+        # Features order: event_cause, requires_road_closure, hour_sin, hour_cos, day_of_week, is_weekend, month
         input_data = pd.DataFrame([{
-            "corridor": corridor,
             "event_cause": event_cause,
+            "requires_road_closure": requires_road_closure,
             "hour_sin": hour_sin,
             "hour_cos": hour_cos,
             "day_of_week": day_of_week,
@@ -135,12 +187,25 @@ def predict_event(db: Session, event: Event) -> dict:
         }])
 
         # Cast categoricals
-        input_data["corridor"] = input_data["corridor"].astype("category")
         input_data["event_cause"] = input_data["event_cause"].astype("category")
 
         # Run inference
-        raw_pred_idx = int(model.predict(input_data)[0])
+        raw_proba = model.predict_proba(input_data)[0]
         class_names = ["Low", "Medium", "High", "Critical"]
-        prediction_result["predicted_disruption_class"] = class_names[raw_pred_idx]
+        
+        # Get active severity weight vector from SeverityRecalibrationLog
+        weights = {}
+        if db:
+            log_entry = db.query(SeverityRecalibrationLog).filter(
+                SeverityRecalibrationLog.event_cause == event_cause,
+                SeverityRecalibrationLog.corridor == corridor
+            ).order_by(SeverityRecalibrationLog.recalibrated_at.desc()).first()
+            if log_entry:
+                weights = log_entry.class_weights
+                
+        final_class, final_confidence = apply_severity_probability_shift(raw_proba, weights, class_names)
+        prediction_result["predicted_disruption_class"] = final_class
+        prediction_result["confidence_score"] = final_confidence
+        prediction_result["raw_predicted_class"] = class_names[int(np.argmax(raw_proba))]
 
     return prediction_result

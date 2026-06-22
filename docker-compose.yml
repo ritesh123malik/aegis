@@ -1,1 +1,57 @@
-# Placeholder for local Docker Compose orchestration (service definitions added later).
+# Self-contained fresh stack for judges / local Docker dev.
+# Do NOT run alongside native Postgres on host port 5433 — this compose file maps
+# postgres to host 5432 (container internal port remains 5432).
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: aegis
+      POSTGRES_PASSWORD: aegis
+      POSTGRES_DB: aegis
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deployment/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aegis -d aegis"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://aegis:aegis@postgres:5432/aegis
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_MOCK_MODE: "false"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  valhalla:
+    image: ghcr.io/giscience/valhalla:latest
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./data/valhalla/custom_files:/custom_files
+    command: >
+      /bin/sh -c "valhalla_build_config --mjolnir-tile-dir /custom_files/valhalla_tiles --mjolnir-tile-extract /custom_files/valhalla_tiles.tar --mjolnir-timezone /custom_files/valhalla_tiles/timezones.sqlite --mjolnir-admin /custom_files/valhalla_tiles/admins.sqlite > /custom_files/valhalla.json && valhalla_build_tiles -c /custom_files/valhalla.json /custom_files/city_map.osm.pbf && valhalla_service /custom_files/valhalla.json 1"
+
+volumes:
+  postgres_data:

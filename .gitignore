@@ -21,3 +21,26 @@ git/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Node / Frontend
+node_modules/
+.next/
+dist/
+build/
+
+# Screenshots & verification outputs
+*.png
+*.log
+verify_*.js
+
+# Environment and IDE settings
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.vscode/
+.idea/
+*.tsbuildinfo
+
+

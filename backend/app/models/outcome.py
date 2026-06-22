@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, func
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, func, Boolean
 from backend.app.database import Base
 
 class Outcome(Base):
@@ -12,3 +12,4 @@ class Outcome(Base):
     notes = Column(String, nullable=True)
     logged_by = Column(String, nullable=True)
     logged_at = Column(DateTime, nullable=True, server_default=func.now())
+    processed_for_training = Column(Boolean, default=False, nullable=False)

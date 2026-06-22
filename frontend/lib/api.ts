@@ -21,6 +21,13 @@ export interface Event {
   disruption_class?: string; // fallback matching UI
 }
 
+export interface PredictionTransparency {
+  raw_model_output: any;
+  calibration_applied?: number | null;
+  final_output: any;
+  calibration_source: string;
+}
+
 export interface Prediction {
   prediction_id: number;
   event_id?: string;
@@ -34,6 +41,7 @@ export interface Prediction {
   predicted_at: string;
   low_data_warning?: boolean;
   warning_message?: string;
+  prediction_transparency?: PredictionTransparency;
 }
 
 export interface Recommendation {
@@ -401,4 +409,120 @@ export async function getRecalibrationHistory(eventCause: string, corridor: stri
   return customFetch<RecalibrationLogEntry[]>(
     `/recalibration_log?event_cause=${encodeURIComponent(eventCause)}&corridor=${encodeURIComponent(corridor)}`
   );
+}
+
+export interface BucketBreakdown {
+  event_cause: string;
+  corridor: string;
+  n_outcomes: number;
+  mean_raw_error: number;
+  mean_corrected_error: number;
+}
+
+export interface LearningReport {
+  total_outcomes_logged: number;
+  mean_raw_error: number;
+  mean_corrected_error: number;
+  improvement_pct: number;
+  severity_raw_accuracy: number;
+  per_bucket_breakdown: BucketBreakdown[];
+}
+
+export async function getLearningReport(): Promise<LearningReport> {
+  if (mockMode) {
+    return {
+      total_outcomes_logged: 6,
+      mean_raw_error: 51.67,
+      mean_corrected_error: 31.67,
+      improvement_pct: 38.71,
+      severity_raw_accuracy: 0.67,
+      per_bucket_breakdown: [
+        {
+          event_cause: "construction",
+          corridor: "Non-corridor",
+          n_outcomes: 1,
+          mean_raw_error: 30.0,
+          mean_corrected_error: 30.0
+        },
+        {
+          event_cause: "others",
+          corridor: "Non-corridor",
+          n_outcomes: 1,
+          mean_raw_error: 0.0,
+          mean_corrected_error: 0.0
+        },
+        {
+          event_cause: "public_event",
+          corridor: "CBD 2",
+          n_outcomes: 2,
+          mean_raw_error: 62.5,
+          mean_corrected_error: 32.5
+        },
+        {
+          event_cause: "vehicle_breakdown",
+          corridor: "ORR East 1",
+          n_outcomes: 1,
+          mean_raw_error: 0.0,
+          mean_corrected_error: 0.0
+        },
+        {
+          event_cause: "vehicle_breakdown",
+          corridor: "Tumkur Road",
+          n_outcomes: 1,
+          mean_raw_error: 0.0,
+          mean_corrected_error: 0.0
+        }
+      ]
+    };
+  }
+
+  return customFetch<LearningReport>("/learning_report");
+}
+
+export interface SimilarEvent {
+  event_id: string;
+  event_type: string;
+  event_cause: string;
+  corridor: string;
+  start_datetime: string | null;
+  requires_road_closure: boolean;
+  similarity_score: number;
+  outcome: {
+    actual_duration_min: number | null;
+    actual_disruption_class: string | null;
+    notes: string | null;
+  } | null;
+}
+
+export async function getSimilarEvents(eventId: string): Promise<SimilarEvent[]> {
+  if (mockMode) {
+    return [
+      {
+        event_id: "mock-similar-1",
+        event_type: "planned",
+        event_cause: "construction",
+        corridor: "Mysore Road",
+        start_datetime: new Date().toISOString(),
+        requires_road_closure: true,
+        similarity_score: 0.95,
+        outcome: {
+          actual_duration_min: 120.0,
+          actual_disruption_class: "Critical",
+          notes: "Metro lane widening finished with slight delay"
+        }
+      },
+      {
+        event_id: "mock-similar-2",
+        event_type: "planned",
+        event_cause: "construction",
+        corridor: "Mysore Road",
+        start_datetime: new Date().toISOString(),
+        requires_road_closure: true,
+        similarity_score: 0.88,
+        outcome: null
+      }
+    ];
+  }
+
+  return customFetch<SimilarEvent[]>(`/similar_events/${eventId}`);
 }

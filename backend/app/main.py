@@ -6,6 +6,8 @@ from backend.app.routers.predict import router as predict_router
 from backend.app.routers.outcomes import router as outcomes_router
 from backend.app.routers.recommend import router as recommend_router
 from backend.app.routers.recalibration import router as recalibration_router
+from backend.app.routers.learning_report import router as learning_report_router
+from backend.app.routers.similar_events import router as similar_events_router
 
 app = FastAPI(title="Aegis — Event Congestion Command System")
 
@@ -28,6 +30,8 @@ app.include_router(predict_router)
 app.include_router(outcomes_router)
 app.include_router(recommend_router)
 app.include_router(recalibration_router)
+app.include_router(learning_report_router)
+app.include_router(similar_events_router)
 
 @app.get("/health", tags=["health"])
 def health_check():

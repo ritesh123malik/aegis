@@ -1,1 +1,34 @@
-# Render.com deployment blueprint for Aegis services.
+databases:
+  - name: aegis-postgres
+    databaseName: aegis
+    user: aegis
+    plan: free
+
+services:
+  - type: web
+    name: aegis-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aegis-postgres
+          property: connectionString
+
+  - type: web
+    name: aegis-frontend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: aegis-backend
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: NEXT_PUBLIC_MOCK_MODE
+        value: "false"

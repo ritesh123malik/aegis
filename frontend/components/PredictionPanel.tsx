@@ -1,4 +1,5 @@
-import { AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 
 interface PredictionProps {
   prediction: {
@@ -7,6 +8,12 @@ interface PredictionProps {
     confidence_score: number;
     low_data_warning?: boolean;
     warning_message?: string;
+    prediction_transparency?: {
+      raw_model_output: any;
+      calibration_applied?: any;
+      final_output: any;
+      calibration_source: string;
+    };
   } | null;
   eventType?: string;
 }
@@ -14,6 +21,8 @@ interface PredictionProps {
 const LOW_CONFIDENCE_THRESHOLD = 0.5;
 
 export default function PredictionPanel({ prediction, eventType }: PredictionProps) {
+  const [showCalculation, setShowCalculation] = useState(false);
+
   if (!prediction) {
     return (
       <div className="h-full flex items-center justify-center text-slate-400 font-sans italic text-sm p-6 bg-slate-800 rounded-lg border border-slate-700">
@@ -101,6 +110,62 @@ export default function PredictionPanel({ prediction, eventType }: PredictionPro
             </span>
             Low historical data for this event type on this corridor — using citywide average.
           </div>
+        </div>
+      )}
+
+      {/* Collapsible Transparency Audit */}
+      {prediction.prediction_transparency && (
+        <div className="border-t border-slate-700 pt-3 mt-1 text-[11px]">
+          <button
+            onClick={() => setShowCalculation(!showCalculation)}
+            className="flex items-center justify-between w-full font-bold text-[10px] text-slate-400 uppercase tracking-wider hover:text-slate-350 transition-colors"
+          >
+            <span>Show Calculation Audit</span>
+            {showCalculation ? (
+              <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+            ) : (
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            )}
+          </button>
+          {showCalculation && (
+            <div className="bg-slate-900 border border-slate-750 p-3 rounded mt-2 flex flex-col gap-2 font-sans text-slate-300">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Raw Model Output:</span>
+                <span className="font-mono font-semibold text-slate-200">
+                  {typeof prediction.prediction_transparency.raw_model_output === "number"
+                    ? `${prediction.prediction_transparency.raw_model_output.toFixed(2)} min`
+                    : prediction.prediction_transparency.raw_model_output}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Calibration Applied:</span>
+                <span className="font-mono font-semibold text-slate-200 text-right max-w-[60%] overflow-x-auto whitespace-pre">
+                  {prediction.prediction_transparency.calibration_applied !== null && prediction.prediction_transparency.calibration_applied !== undefined
+                    ? (typeof prediction.prediction_transparency.calibration_applied === "number"
+                      ? `${prediction.prediction_transparency.calibration_applied >= 0 ? "+" : ""}${prediction.prediction_transparency.calibration_applied.toFixed(2)} min`
+                      : typeof prediction.prediction_transparency.calibration_applied === "object"
+                        ? Object.entries(prediction.prediction_transparency?.calibration_applied || {})
+                            .map(([k, v]) => `${k}: ${(v as number) >= 0 ? "+" : ""}${(v as number).toFixed(2)}`)
+                            .join(", ")
+                        : JSON.stringify(prediction.prediction_transparency.calibration_applied)
+                    )
+                    : "None / Not Applicable"}
+                </span>
+              </div>
+              <div className="flex justify-between items-center border-t border-slate-800 pt-1.5 mt-0.5">
+                <span className="text-slate-500 font-bold">Final Prediction:</span>
+                <span className="font-mono font-bold text-white">
+                  {typeof prediction.prediction_transparency.final_output === "number"
+                    ? `${prediction.prediction_transparency.final_output.toFixed(2)} min`
+                    : prediction.prediction_transparency.final_output}
+                </span>
+              </div>
+              <div className="text-[9px] text-slate-500 bg-slate-950/40 p-2 rounded border border-slate-850 mt-1 leading-relaxed">
+                <span className="font-bold text-slate-400 block mb-0.5 uppercase tracking-wider">Calibration Source</span>
+                {prediction.prediction_transparency.calibration_source}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

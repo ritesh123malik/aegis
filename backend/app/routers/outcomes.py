@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from backend.app.database import SessionLocal
@@ -6,7 +6,8 @@ from backend.app.models.event import Event
 from backend.app.models.prediction import Prediction
 from backend.app.models.outcome import Outcome
 from backend.app.schemas.outcome_schema import OutcomeCreate, OutcomeRecalibrationResponse
-from backend.app.services.recalibration_service import recalibrate
+from backend.app.services.recalibration_service import recalibrate, calculate_severity_weights
+from backend.app.services.pipeline_service import trigger_retraining_pipeline
 
 router = APIRouter(prefix="/outcomes", tags=["outcomes"])
 
@@ -18,7 +19,7 @@ def get_db():
         db.close()
 
 @router.post("", response_model=OutcomeRecalibrationResponse)
-def create_outcome(payload: OutcomeCreate, db: Session = Depends(get_db)):
+def create_outcome(payload: OutcomeCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     # 1. Lookup the event to get event_cause and corridor
     db_event = db.query(Event).filter(Event.event_id == payload.event_id).first()
     if not db_event:
@@ -29,6 +30,14 @@ def create_outcome(payload: OutcomeCreate, db: Session = Depends(get_db)):
     db.add(db_outcome)
     db.commit()
     db.refresh(db_outcome)
+
+    # If unplanned event, trigger severity weights recalibration
+    if db_event.event_type == "unplanned" and db_outcome.actual_disruption_class is not None:
+        calculate_severity_weights(
+            db_session=db,
+            event_cause=(db_event.event_cause or "others"),
+            corridor=(db_event.corridor or "Non-corridor")
+        )
 
     # 3. Lookup the corresponding prediction to get predicted value
     db_prediction = db.query(Prediction).filter(Prediction.event_id == payload.event_id).first()
@@ -43,6 +52,13 @@ def create_outcome(payload: OutcomeCreate, db: Session = Depends(get_db)):
         predicted_value=predicted_val,
         actual_value=actual_val
     )
+
+    # Trigger online retraining if threshold of unprocessed outcomes is crossed
+    import os
+    OUTCOME_RETRAIN_THRESHOLD = int(os.getenv("OUTCOME_RETRAIN_THRESHOLD", "500"))
+    total_unprocessed = db.query(Outcome).filter(Outcome.processed_for_training == False).count()
+    if total_unprocessed >= OUTCOME_RETRAIN_THRESHOLD:
+        background_tasks.add_task(trigger_retraining_pipeline)
 
     return {
         "outcome": db_outcome,

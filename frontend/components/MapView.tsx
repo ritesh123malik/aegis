@@ -46,8 +46,8 @@ interface MapViewProps {
   selectedEventId: string | null;
   onEventSelect: (eventId: string) => void;
   barricades?: { lat: number; lng: number; junction_name: string }[];
-  diversions?: { polyline: [number, number][] }[];
-  signals?: { lat: number; lng: number; signal_id: string }[];
+  diversions?: { route_polyline?: [number, number][]; polyline?: [number, number][]; description?: string }[];
+  signals?: { lat: number; lng: number; signal_id: string; recommended_action: string }[];
 }
 
 export default function MapView({
@@ -60,8 +60,8 @@ export default function MapView({
 }: MapViewProps) {
   const defaultCenter: [number, number] = [12.9716, 77.5946];
   const selectedEvent = events.find(e => e.event_id === selectedEventId);
-  const center: [number, number] = selectedEvent 
-    ? [selectedEvent.latitude, selectedEvent.longitude] 
+  const center: [number, number] = selectedEvent
+    ? [selectedEvent.latitude, selectedEvent.longitude]
     : defaultCenter;
 
   const getMarkerColor = (event: Event) => {
@@ -80,9 +80,9 @@ export default function MapView({
 
   return (
     <div className="w-full h-full relative">
-      <MapContainer 
-        center={defaultCenter} 
-        zoom={11} 
+      <MapContainer
+        center={defaultCenter}
+        zoom={11}
         className="w-full h-full dark-tiles"
       >
         <ChangeView center={center} />
@@ -117,7 +117,7 @@ export default function MapView({
           );
         })}
 
-        {barricades.map((b, idx) => (
+        {barricades?.map((b, idx) => (
           <Marker
             key={`barricade-${idx}`}
             position={[b.lat, b.lng]}
@@ -132,7 +132,7 @@ export default function MapView({
           </Marker>
         ))}
 
-        {signals.map((s, idx) => (
+        {signals?.map((s, idx) => (
           <Marker
             key={`signal-${idx}`}
             position={[s.lat, s.lng]}
@@ -148,15 +148,26 @@ export default function MapView({
           </Marker>
         ))}
 
-        {diversions.map((d, idx) => (
-          <Polyline
-            key={`diversion-${idx}`}
-            positions={d.polyline}
-            color="#a855f7"
-            weight={6}
-            opacity={0.9}
-          />
-        ))}
+        {diversions?.map((d, idx) => {
+          // 1. Safely grab the data, falling back to 'polyline' if it's an older record
+          const positions = d.route_polyline || (d as any).polyline;
+
+          // Component Defensiveness: Validate that polyline is a valid array of coordinate pairs
+          const polyline = (d as any).route_polyline || (d as any).polyline;
+          if (!Array.isArray(polyline) || polyline.some(coord => !Array.isArray(coord) || coord.length < 2)) {
+            console.warn("Invalid polyline format ignored:", polyline);
+            return null;
+          }
+          return (
+            <Polyline
+              key={`diversion-${idx}`}
+              positions={polyline}
+              color="#a855f7"
+              weight={6}
+              opacity={0.9}
+            />
+          );
+        })}
       </MapContainer>
     </div>
   );
