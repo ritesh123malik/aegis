@@ -1,0 +1,10 @@
+{
+  "hour_cos": 12407108852.0,
+  "hour_sin": 8974654316.704254,
+  "corridor_event_rate": 7597385888.0,
+  "day_of_week": 6466198605.951904,
+  "requires_road_closure": 906232138.0,
+  "corridor": 468940070.0,
+  "event_cause": 289470100.0,
+  "is_weekend": 0.0
+}

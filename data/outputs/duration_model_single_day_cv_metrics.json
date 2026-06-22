@@ -1,0 +1,33 @@
+{
+  "model_mae_mean": 301.3852900894619,
+  "model_mae_std": 22.53316861568739,
+  "baseline_mae_mean": 356.36672072152516,
+  "baseline_mae_std": 19.115047861885383,
+  "per_fold_breakdown": [
+    {
+      "fold": 1,
+      "model_mae": 295.930971085275,
+      "baseline_mae": 352.9577943524518
+    },
+    {
+      "fold": 2,
+      "model_mae": 342.83670694753175,
+      "baseline_mae": 373.26102367534827
+    },
+    {
+      "fold": 3,
+      "model_mae": 277.84229486209284,
+      "baseline_mae": 334.5032278109729
+    },
+    {
+      "fold": 4,
+      "model_mae": 286.2440948581865,
+      "baseline_mae": 338.00829250909607
+    },
+    {
+      "fold": 5,
+      "model_mae": 304.0723826942235,
+      "baseline_mae": 383.10326525975677
+    }
+  ]
+}

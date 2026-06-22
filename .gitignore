@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+
+# Databases & local state
+test.db
+test.db-journal
+*.log
+
+# Large tool/dependency directories
+pgsql/
+git/
+
+# OS files
+.DS_Store
+Thumbs.db
