@@ -1,1 +1,6 @@
-// Next.js configuration for the Aegis frontend.
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+}
+
+module.exports = nextConfig

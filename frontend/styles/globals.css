@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#__next {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: #0f172a;
+  color: #f1f5f9;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
+
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: #1e293b !important;
+}
+
+/* Dark mode tiles styling */
+.dark-tiles img {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}

@@ -15,6 +15,10 @@ SEVERITY_MODEL_PATH = PROJECT_ROOT / "backend" / "app" / "ml" / "severity_model.
 # Singleton model cache to avoid reloading on every request
 _models = {}
 
+# Two-state placeholder, not yet variance-based per original spec; acceptable for demo, real fix is future work.
+LOW_DATA_CONFIDENCE = 0.4
+DEFAULT_CONFIDENCE = 0.85
+
 def get_duration_model():
     if "duration" not in _models:
         if not DURATION_MODEL_PATH.exists():
@@ -73,11 +77,11 @@ def predict_event(db: Session, event: Event) -> dict:
     ).scalar() or 0
 
     if n_historical < 5:
-        confidence_score = 0.4
+        confidence_score = LOW_DATA_CONFIDENCE
         low_data_warning = True
         warning_msg = "Low historical data for this event type on this corridor — using citywide average confidence."
     else:
-        confidence_score = 0.85
+        confidence_score = DEFAULT_CONFIDENCE
         low_data_warning = False
         warning_msg = None
 
