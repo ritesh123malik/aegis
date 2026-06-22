@@ -45,16 +45,7 @@ def get_corridor_event_rate(db: Session, corridor: str, event_cause: str) -> flo
         return 0.0
     return float(numerator) / float(denominator)
 
-def get_bias_correction(db: Session, event_cause: str, corridor: str) -> float:
-    # Retrieve the latest recalibration log entry
-    log_entry = db.query(RecalibrationLog).filter(
-        RecalibrationLog.event_cause == event_cause,
-        RecalibrationLog.corridor == corridor
-    ).order_by(RecalibrationLog.recalibrated_at.desc()).first()
 
-    if log_entry:
-        return log_entry.new_bias_correction
-    return 0.0
 
 def predict_event(db: Session, event: Event) -> dict:
     event_cause = event.event_cause or "others"
@@ -73,8 +64,7 @@ def predict_event(db: Session, event: Event) -> dict:
     # Get dynamic corridor event rate
     corridor_event_rate = get_corridor_event_rate(db, corridor, event_cause)
 
-    # Get bias correction from recalibration log
-    bias_correction = get_bias_correction(db, event_cause, corridor)
+
 
     # Check for historical event volume (confidence warning threshold)
     n_historical = db.query(func.count(Event.event_id)).filter(
@@ -122,11 +112,8 @@ def predict_event(db: Session, event: Event) -> dict:
         # Run inference
         raw_pred = float(model.predict(input_data)[0])
 
-        # Apply bias correction
-        final_pred = raw_pred + bias_correction
-        
-        # Guard against negative durations
-        prediction_result["predicted_duration_min"] = max(0.0, final_pred)
+        # Guard against negative durations on the raw model prediction
+        prediction_result["predicted_duration_min"] = max(0.0, raw_pred)
 
     else:  # event_type == "unplanned" (or fallback)
         # Load severity classifier model

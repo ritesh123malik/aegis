@@ -7,6 +7,7 @@ from backend.app.models.event import Event
 from backend.app.models.prediction import Prediction
 from backend.app.schemas.prediction_schema import PredictionResponse
 from backend.app.services.prediction_service import predict_event
+from backend.app.services.recalibration_service import apply_bias_correction
 
 router = APIRouter(prefix="/predict", tags=["predict"])
 
@@ -29,6 +30,17 @@ def run_prediction(payload: PredictRequest, db: Session = Depends(get_db)):
 
     # 2. Run prediction logic
     pred_res = predict_event(db, db_event)
+
+    # Apply bias correction at endpoint level for planned events
+    if db_event.event_type == "planned":
+        raw_duration = pred_res["predicted_duration_min"]
+        corrected_duration = apply_bias_correction(
+            raw_prediction=raw_duration,
+            event_cause=(db_event.event_cause or "others"),
+            corridor=(db_event.corridor or "Non-corridor"),
+            db_session=db
+        )
+        pred_res["predicted_duration_min"] = corrected_duration
 
     # 3. Insert a log row into predictions table
     db_pred = Prediction(
