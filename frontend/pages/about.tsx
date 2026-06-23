@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Eye, RefreshCw, Layers, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Eye, RefreshCw, Layers, ShieldCheck, AlertTriangle, Activity, BarChart2 } from "lucide-react";
 
 interface FeatureImportance {
   [key: string]: number;
@@ -118,6 +118,52 @@ export default function AboutPage() {
               <h3 className="text-lg font-bold text-white">We Show Our Work</h3>
               <p className="text-slate-350 text-xs leading-relaxed">
                 Aegis is built with transparent operations at its core. Features like the <strong>&quot;Show Calculation Audit&quot;</strong> chevron accordion in the prediction panel and the <strong>baseline comparison</strong> in the recommendation panel ensure that every recommendation and metric shown can be traced back to real computation, never an unexplained black box.
+              </p>
+            </div>
+          </div>
+          {/* Section: What We're Honest About */}
+          <div className="flex flex-col gap-1 border-b border-slate-800 pb-4 mt-4">
+            <h2 className="text-2xl font-black text-white tracking-wide uppercase">What We're Honest About</h2>
+            <p className="text-slate-400 text-[10px] uppercase tracking-wider font-semibold">
+              Limitations, Boundaries &amp; Data Realities
+            </p>
+          </div>
+
+          {/* Section 1: Severity classification has a known boundary */}
+          <div className="bg-slate-950 p-6 rounded-lg border border-slate-800 shadow-lg flex gap-4">
+            <div className="p-3 bg-slate-900 rounded border border-slate-800 h-fit text-accentOrange">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <h3 className="text-lg font-bold text-white">Severity classification has a known boundary</h3>
+              <p className="text-slate-300 text-xs leading-relaxed">
+                Distinguishing High from Low, or Critical from Medium, requires knowing whether a road closure is required — a real signal, used correctly, but one that means the model is strongest on the ~92% of cases (Low/Medium) and more limited on the rarer High/Critical cases. The real macro-F1 score is <strong>0.5359</strong> (post leakage-fix) plainly, not a marketing-rounded version.
+              </p>
+            </div>
+          </div>
+
+          {/* Section 2: Confidence scoring is principled, not perfect */}
+          <div className="bg-slate-950 p-6 rounded-lg border border-slate-800 shadow-lg flex gap-4">
+            <div className="p-3 bg-slate-900 rounded border border-slate-800 h-fit text-accentBlue">
+              <Activity className="w-6 h-6" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <h3 className="text-lg font-bold text-white">Confidence scoring is principled, not perfect</h3>
+              <p className="text-slate-300 text-xs leading-relaxed">
+                The duration model's confidence uses a sample-size-based formula (more historical examples = higher confidence), and the severity model uses real classifier probabilities — both are real computed signals, not arbitrary, but the duration model's curve is a reasonable heuristic, not a fully learned calibration.
+              </p>
+            </div>
+          </div>
+
+          {/* Section 3: Our outcome history is still small */}
+          <div className="bg-slate-950 p-6 rounded-lg border border-slate-800 shadow-lg flex gap-4">
+            <div className="p-3 bg-slate-900 rounded border border-slate-800 h-fit text-accentGreen">
+              <BarChart2 className="w-6 h-6" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <h3 className="text-lg font-bold text-white">Our outcome history is still small</h3>
+              <p className="text-slate-300 text-xs leading-relaxed">
+                The recalibration loop and Learning Report strengthen with every real outcome logged, and today's numbers reflect early, limited history — not a claim of large-scale proven learning yet.
               </p>
             </div>
           </div>
