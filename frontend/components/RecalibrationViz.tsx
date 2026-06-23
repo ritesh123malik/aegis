@@ -132,7 +132,7 @@ export default function RecalibrationViz({ eventCause, corridor, latestUpdate }:
       </div>
 
       {/* Step line Chart Area */}
-      <div className="w-full h-48 bg-slate-950/80 rounded border border-slate-850 p-2 relative">
+      <div className="w-full h-48 bg-slate-950/80 rounded border border-slate-850 p-2 relative" style={{ height: "192px" }}>
         {loading && history.length === 0 ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-900/90 rounded">
             <RefreshCw className="w-6 h-6 animate-spin text-accentBlue" />
@@ -145,7 +145,7 @@ export default function RecalibrationViz({ eventCause, corridor, latestUpdate }:
             Error: {error}
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={192}>
             <LineChart
               data={chartData}
               margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
