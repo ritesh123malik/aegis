@@ -1,33 +1,33 @@
 {
-  "model_mae_mean": 285.9565761373893,
-  "model_mae_std": 32.00411593527412,
-  "baseline_mae_mean": 349.8336739928013,
-  "baseline_mae_std": 17.888033599733056,
+  "model_mae_mean": 274.43515971079717,
+  "model_mae_std": 15.559054124563117,
+  "baseline_mae_mean": 347.9487549643642,
+  "baseline_mae_std": 18.096983974258713,
   "per_fold_breakdown": [
     {
       "fold": 1,
-      "model_mae": 235.0414651892934,
-      "baseline_mae": 351.05508394710546
+      "model_mae": 257.05948271158144,
+      "baseline_mae": 369.7112703421701
     },
     {
       "fold": 2,
-      "model_mae": 331.9122717955015,
-      "baseline_mae": 372.2382336824659
+      "model_mae": 280.8531907616459,
+      "baseline_mae": 365.6384549971816
     },
     {
       "fold": 3,
-      "model_mae": 301.44628341743623,
-      "baseline_mae": 317.98361840130224
+      "model_mae": 298.7869930917437,
+      "baseline_mae": 324.3760643783142
     },
     {
       "fold": 4,
-      "model_mae": 288.4910500495983,
-      "baseline_mae": 358.8553379877816
+      "model_mae": 258.1307345491535,
+      "baseline_mae": 330.81061807041465
     },
     {
       "fold": 5,
-      "model_mae": 272.8918102351169,
-      "baseline_mae": 349.0360959453514
+      "model_mae": 277.3453974398614,
+      "baseline_mae": 349.2073670337404
     }
   ]
 }

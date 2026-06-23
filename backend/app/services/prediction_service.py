@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from backend.app.models.event import Event
 from backend.app.models.recalibration import RecalibrationLog
-from backend.app.models.severity_recalibration import SeverityRecalibrationLog
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]  # aegis root
 
@@ -35,25 +34,6 @@ def get_severity_model():
     return _models["severity"]
 
 
-def apply_severity_probability_shift(raw_proba: np.ndarray, weights: dict, class_names: list) -> tuple[str, float]:
-    weight_vector = np.array([weights.get(cls, 0.0) for cls in class_names])
-    
-    # Apply shift and ReLU (max with 0)
-    adjusted_proba = np.maximum(0.0, raw_proba + weight_vector)
-    
-    # L1 Normalization so probabilities sum to 1.0
-    sum_proba = np.sum(adjusted_proba)
-    if sum_proba > 0:
-        adjusted_proba = adjusted_proba / sum_proba
-    else:
-        # Fallback if all adjusted probabilities are zero
-        adjusted_proba = raw_proba
-    
-    final_class_idx = int(np.argmax(adjusted_proba))
-    final_class = class_names[final_class_idx]
-    final_confidence = float(adjusted_proba[final_class_idx])
-    
-    return final_class, final_confidence
 
 def get_corridor_event_rate(db: Session, corridor: str, event_cause: str) -> float:
     # Numerator: Count of historical events in db for this corridor and event_cause
@@ -193,19 +173,12 @@ def predict_event(db: Session, event: Event) -> dict:
         raw_proba = model.predict_proba(input_data)[0]
         class_names = ["Low", "Medium", "High", "Critical"]
         
-        # Get active severity weight vector from SeverityRecalibrationLog
-        weights = {}
-        if db:
-            log_entry = db.query(SeverityRecalibrationLog).filter(
-                SeverityRecalibrationLog.event_cause == event_cause,
-                SeverityRecalibrationLog.corridor == corridor
-            ).order_by(SeverityRecalibrationLog.recalibrated_at.desc()).first()
-            if log_entry:
-                weights = log_entry.class_weights
-                
-        final_class, final_confidence = apply_severity_probability_shift(raw_proba, weights, class_names)
+        final_class_idx = int(np.argmax(raw_proba))
+        final_class = class_names[final_class_idx]
+        final_confidence = float(raw_proba[final_class_idx])
+        
         prediction_result["predicted_disruption_class"] = final_class
         prediction_result["confidence_score"] = final_confidence
-        prediction_result["raw_predicted_class"] = class_names[int(np.argmax(raw_proba))]
+        prediction_result["raw_predicted_class"] = final_class
 
     return prediction_result

@@ -121,89 +121,10 @@ def run_tests():
     print("[INIT] Database outcomes and severity_recalibration_log tables cleared.")
 
     # --------------------------------------------------
-    # GATE 1: Severity Classifier Recalibration
+    # GATE 1: Severity Classifier Recalibration (Reverted per spec)
     # --------------------------------------------------
-    print("\n--- [GATE 1] Step 1: Unit Verification (Mathematical Bounds) ---")
-    from backend.app.services.prediction_service import apply_severity_probability_shift
-
-    class_names = ["Low", "Medium", "High", "Critical"]
-
-    # Assertion 1 & 2: Bounds & Normalization
-    raw_proba_1 = np.array([0.1, 0.4, 0.4, 0.1])
-    weights_1 = {"Low": -0.5, "Medium": 0.1, "High": 0.0, "Critical": 0.0}
-    final_class_1, final_conf_1 = apply_severity_probability_shift(raw_proba_1, weights_1, class_names)
-    
-    # Manually compute shifts to assert bounds in test
-    weight_vector = np.array([weights_1.get(cls, 0.0) for cls in class_names])
-    shifted = np.maximum(0.0, raw_proba_1 + weight_vector)
-    normalized = shifted / np.sum(shifted)
-    
-    print(f"Shifted & Normalized Probabilities: {normalized}")
-    for p in normalized:
-        assert 0.0 <= p <= 1.0, f"Probability {p} is out of bounds [0, 1]!"
-    print("Assertion 1 Passed: No probability is < 0.0 or > 1.0.")
-
-    assert math.isclose(np.sum(normalized), 1.0, rel_tol=1e-9), f"Probabilities sum to {np.sum(normalized)} instead of 1.0!"
-    print("Assertion 2 Passed: Sum of probabilities is exactly 1.0.")
-
-    # Assertion 3: Argmax Shift
-    raw_proba_2 = np.array([0.1, 0.6, 0.2, 0.1])  # Medium is highest (0.6)
-    weights_2 = {"Low": 0.0, "Medium": -0.5, "High": 0.0, "Critical": 0.9} # Massive Critical weight
-    final_class_2, final_conf_2 = apply_severity_probability_shift(raw_proba_2, weights_2, class_names)
-    print(f"Argmax Shift outcome: raw highest=Medium, post-shift class={final_class_2} (confidence={final_conf_2:.4f})")
-    assert final_class_2 == "Critical", f"Expected shift to Critical, got {final_class_2}!"
-    print("Assertion 3 Passed: Argmax shift correctly outputted 'Critical'.")
-
-    print("\n--- [GATE 1] Step 2: Database & Integration Verification ---")
-    # Find one unplanned event to test
-    with engine.connect() as conn:
-        event = conn.execute(text(
-            "SELECT event_id, event_cause, corridor FROM events WHERE event_type = 'unplanned' LIMIT 1"
-        )).fetchone()
-    if not event:
-        raise RuntimeError("No unplanned event found in DB to run integration checks!")
-    
-    event_id, cause, corridor = event.event_id, event.event_cause, event.corridor
-    print(f"Picked test event: ID={event_id}, Cause={cause}, Corridor={corridor}")
-
-    # Log 5 mismatched outcomes
-    print("Logging 5 outcomes to trigger SeverityRecalibrationLog row insertion...")
-    for idx in range(1, 6):
-        # Predict first to get predicted class
-        r_pred = requests.post(f"{backend_url}/predict", json={"event_id": event_id})
-        pred_class = r_pred.json().get("predicted_disruption_class")
-        actual_class = "Critical" if pred_class != "Critical" else "Low"
-        
-        # Log outcome
-        r_out = requests.post(f"{backend_url}/outcomes", json={
-            "event_id": event_id,
-            "actual_disruption_class": actual_class,
-            "notes": f"VRP test outcome {idx}",
-            "logged_by": "VRP Test Suite"
-        })
-        assert r_out.status_code == 200, f"Logging outcome failed with {r_out.status_code}!"
-
-    # Assertion 4: Verify DB row
-    with engine.connect() as conn:
-        recal_rows = conn.execute(text("SELECT * FROM severity_recalibration_log")).fetchall()
-    print(f"SeverityRecalibrationLog rows in DB: {len(recal_rows)}")
-    assert len(recal_rows) > 0, "No recalibration log row was created!"
-    latest_recal = recal_rows[-1]
-    print(f"Latest logged class weights: {latest_recal.class_weights}")
-    assert isinstance(latest_recal.class_weights, dict), "class_weights must be a dictionary!"
-    print("Assertion 4 Passed: SeverityRecalibrationLog row successfully verified in database.")
-
-    # Assertion 5: Predict again and check prediction_transparency.calibration_applied contains weight dict
-    r_final_pred = requests.post(f"{backend_url}/predict", json={"event_id": event_id})
-    final_pred_payload = r_final_pred.json()
-    transparency = final_pred_payload.get("prediction_transparency")
-    
-    print(f"Prediction Transparency Payload: {json.dumps(transparency, indent=2)}")
-    assert transparency is not None, "transparency payload is missing!"
-    calibration_applied = transparency.get("calibration_applied")
-    assert isinstance(calibration_applied, dict), f"calibration_applied must be a dict (JSON), got {type(calibration_applied)}!"
-    assert calibration_applied == latest_recal.class_weights, "Applied calibration weights mismatch DB log!"
-    print("Assertion 5 Passed: Prediction transparency successfully exposes calibration weights dict.")
+    print("\n--- [GATE 1] Severity Classifier Recalibration (Disabled per spec) ---")
+    print("Gate 1 checks bypassed as severity recalibration is reverted.")
 
     # Wait for the initial retraining pipeline triggered in Gate 1 to complete
     print("Waiting for the initial retraining pipeline to finish (timeout 30s)...")

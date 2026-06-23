@@ -10,7 +10,6 @@ from backend.app.models.event import Event
 from backend.app.models.prediction import Prediction
 from backend.app.models.outcome import Outcome
 from backend.app.models.recalibration import RecalibrationLog
-from backend.app.models.severity_recalibration import SeverityRecalibrationLog
 
 logger = logging.getLogger(__name__)
 
@@ -127,58 +126,4 @@ def apply_bias_correction(raw_prediction: float, event_cause: str, corridor: str
     return max(0.0, raw_prediction + bias)
 
 
-def calculate_severity_weights(db_session: Session, event_cause: str, corridor: str) -> dict:
-    """
-    Recalibration Algorithm: calculate historical misclassification rate.
-    Compares the actual_disruption_class frequency against predicted_disruption_class frequency
-    to calculate a weight adjustment vector W with learning rate alpha = 0.2.
-    """
-    # Fetch recent outcomes for the specific cause and corridor
-    outcomes = db_session.query(Outcome).join(Event, Outcome.event_id == Event.event_id).filter(
-        Event.event_cause == event_cause,
-        Event.corridor == corridor,
-        Outcome.actual_disruption_class.isnot(None)
-    ).all()
-
-    class_names = ["Low", "Medium", "High", "Critical"]
-    weights = {c: 0.0 for c in class_names}
-
-    if not outcomes:
-        return weights
-
-    actual_counts = {c: 0 for c in class_names}
-    pred_counts = {c: 0 for c in class_names}
-    matched_count = 0
-
-    for outcome in outcomes:
-        # Get the latest prediction for this event
-        pred = db_session.query(Prediction).filter(
-            Prediction.event_id == outcome.event_id,
-            Prediction.predicted_disruption_class.isnot(None)
-        ).order_by(Prediction.predicted_at.desc()).first()
-
-        if pred:
-            actual_counts[outcome.actual_disruption_class] += 1
-            pred_counts[pred.predicted_disruption_class] += 1
-            matched_count += 1
-
-    if matched_count > 0:
-        alpha = 0.2
-        for c in class_names:
-            f_actual = actual_counts[c] / matched_count
-            f_pred = pred_counts[c] / matched_count
-            weights[c] = float(alpha * (f_actual - f_pred))
-
-    new_log = SeverityRecalibrationLog(
-        event_cause=event_cause,
-        corridor=corridor,
-        class_weights=weights,
-        n_outcomes_used=len(outcomes),
-        recalibrated_at=datetime.utcnow()
-    )
-    db_session.add(new_log)
-    db_session.commit()
-    db_session.refresh(new_log)
-
-    return weights
 

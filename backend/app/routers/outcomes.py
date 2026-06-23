@@ -6,7 +6,7 @@ from backend.app.models.event import Event
 from backend.app.models.prediction import Prediction
 from backend.app.models.outcome import Outcome
 from backend.app.schemas.outcome_schema import OutcomeCreate, OutcomeRecalibrationResponse
-from backend.app.services.recalibration_service import recalibrate, calculate_severity_weights
+from backend.app.services.recalibration_service import recalibrate
 from backend.app.services.pipeline_service import trigger_retraining_pipeline
 
 router = APIRouter(prefix="/outcomes", tags=["outcomes"])
@@ -30,14 +30,6 @@ def create_outcome(payload: OutcomeCreate, background_tasks: BackgroundTasks, db
     db.add(db_outcome)
     db.commit()
     db.refresh(db_outcome)
-
-    # If unplanned event, trigger severity weights recalibration
-    if db_event.event_type == "unplanned" and db_outcome.actual_disruption_class is not None:
-        calculate_severity_weights(
-            db_session=db,
-            event_cause=(db_event.event_cause or "others"),
-            corridor=(db_event.corridor or "Non-corridor")
-        )
 
     # 3. Lookup the corresponding prediction to get predicted value
     db_prediction = db.query(Prediction).filter(Prediction.event_id == payload.event_id).first()

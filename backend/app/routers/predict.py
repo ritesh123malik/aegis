@@ -64,25 +64,11 @@ def run_prediction(payload: PredictRequest, db: Session = Depends(get_db)):
         predicted_class = pred_res["predicted_disruption_class"]
         raw_predicted_class = pred_res.get("raw_predicted_class", predicted_class)
         
-        from backend.app.models.severity_recalibration import SeverityRecalibrationLog
-        recal_log = db.query(SeverityRecalibrationLog).filter(
-            SeverityRecalibrationLog.event_cause == (db_event.event_cause or "others"),
-            SeverityRecalibrationLog.corridor == (db_event.corridor or "Non-corridor")
-        ).order_by(SeverityRecalibrationLog.recalibrated_at.desc()).first()
-        
-        weights = recal_log.class_weights if recal_log else None
-        n_outcomes = recal_log.n_outcomes_used if recal_log else 0
-        
-        if recal_log:
-            source_str = f"{(db_event.event_cause or 'others')}/{(db_event.corridor or 'Non-corridor')} bucket, n_outcomes_used={n_outcomes}"
-        else:
-            source_str = "No calibration history yet for this bucket — raw model output used as-is"
-            
         prediction_transparency = {
             "raw_model_output": raw_predicted_class,
-            "calibration_applied": weights,
+            "calibration_applied": None,
             "final_output": predicted_class,
-            "calibration_source": source_str
+            "calibration_source": "Severity classification is not yet part of the recalibration loop — only duration predictions are recalibrated currently."
         }
 
     # 3. Insert a log row into predictions table
