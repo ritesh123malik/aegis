@@ -126,15 +126,7 @@ def run_tests():
     print("\n--- [GATE 1] Severity Classifier Recalibration (Disabled per spec) ---")
     print("Gate 1 checks bypassed as severity recalibration is reverted.")
 
-    # Wait for the initial retraining pipeline triggered in Gate 1 to complete
-    print("Waiting for the initial retraining pipeline to finish (timeout 30s)...")
-    for _ in range(30):
-        time.sleep(1)
-        with engine.connect() as conn:
-            unprocessed = conn.execute(text("SELECT COUNT(*) FROM outcomes WHERE processed_for_training = false")).fetchone()[0]
-        if unprocessed == 0:
-            break
-    print("Initial retraining pipeline completed. Proceeding to GATE 2.")
+
 
 
     # --------------------------------------------------
