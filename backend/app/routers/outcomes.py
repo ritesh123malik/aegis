@@ -46,11 +46,11 @@ def create_outcome(payload: OutcomeCreate, background_tasks: BackgroundTasks, db
     )
 
     # Trigger online retraining if threshold of unprocessed outcomes is crossed
-    import os
-    OUTCOME_RETRAIN_THRESHOLD = int(os.getenv("OUTCOME_RETRAIN_THRESHOLD", "500"))
-    total_unprocessed = db.query(Outcome).filter(Outcome.processed_for_training == False).count()
-    if total_unprocessed >= OUTCOME_RETRAIN_THRESHOLD:
-        background_tasks.add_task(trigger_retraining_pipeline)
+    # import os
+    # OUTCOME_RETRAIN_THRESHOLD = int(os.getenv("OUTCOME_RETRAIN_THRESHOLD", "500"))
+    # total_unprocessed = db.query(Outcome).filter(Outcome.processed_for_training == False).count()
+    # if total_unprocessed >= OUTCOME_RETRAIN_THRESHOLD:
+    #     background_tasks.add_task(trigger_retraining_pipeline)
 
     return {
         "outcome": db_outcome,
