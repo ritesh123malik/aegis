@@ -11,7 +11,7 @@ from backend.app.routers.recalibration import router as recalibration_router
 from backend.app.routers.learning_report import router as learning_report_router
 from backend.app.routers.similar_events import router as similar_events_router
 
-PROJECT_ROOT = Path("/Users/ritesh/.gemini/antigravity/scratch/aegis")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 app = FastAPI(title="Aegis — Event Congestion Command System")
 

@@ -10,7 +10,7 @@ from backend.app.models.event import Event
 from backend.app.services import prediction_service
 
 # Load training scripts dynamically because they start with numbers
-PROJECT_ROOT = Path("/Users/ritesh/.gemini/antigravity/scratch/aegis")
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 duration_train_path = PROJECT_ROOT / "training" / "03_train_duration_model.py"
 spec_dur = importlib.util.spec_from_file_location("train_duration_model_module", duration_train_path)
@@ -42,7 +42,7 @@ def extract_db_to_parquet():
             print("No unprocessed outcomes found for parquet extraction.")
             return
             
-        project_root = Path("/Users/ritesh/.gemini/antigravity/scratch/aegis")
+        project_root = PROJECT_ROOT
         cleaned_path = project_root / "data" / "processed" / "cleaned_events.parquet"
         severity_path = project_root / "data" / "processed" / "severity_features.parquet"
         
@@ -128,7 +128,7 @@ def trigger_retraining_pipeline():
     _retraining_in_progress = True
     
     try:
-        project_root = Path("/Users/ritesh/.gemini/antigravity/scratch/aegis")
+        project_root = PROJECT_ROOT
         staging_dir = project_root / "backend" / "app" / "ml" / "staging"
         production_dir = project_root / "backend" / "app" / "ml"
         
