@@ -121,9 +121,14 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
-          <Link href="/learning-report" className="text-[9px] font-bold text-accentBlue hover:text-blue-300 uppercase border border-slate-700 px-2 py-1 rounded bg-slate-950 transition-colors">
-            Learning Report
-          </Link>
+          <div className="flex flex-col gap-1">
+            <Link href="/learning-report" className="text-[9px] font-bold text-accentBlue hover:text-blue-300 uppercase border border-slate-700 px-2 py-1 rounded bg-slate-950 transition-colors text-center">
+              Learning Report
+            </Link>
+            <Link href="/about" className="text-[9px] font-bold text-accentBlue hover:text-blue-300 uppercase border border-slate-700 px-2 py-1 rounded bg-slate-950 transition-colors text-center">
+              About Aegis
+            </Link>
+          </div>
         </div>
 
         {/* Incidents List Container */}
