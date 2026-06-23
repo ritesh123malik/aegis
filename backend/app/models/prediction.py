@@ -13,6 +13,7 @@ class Prediction(Base):
     recommended_officers = Column(Integer, nullable=True)
     recommended_barricades = Column(JSONB().with_variant(JSON, "sqlite"), nullable=True)
     recommended_diversions = Column(JSONB().with_variant(JSON, "sqlite"), nullable=True)
+    prediction_transparency = Column(JSONB().with_variant(JSON, "sqlite"), nullable=True)
     model_version = Column(String, nullable=True)
     predicted_at = Column(DateTime, nullable=True, server_default=func.now())
 

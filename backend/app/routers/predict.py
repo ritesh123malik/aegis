@@ -91,6 +91,7 @@ def run_prediction(payload: PredictRequest, db: Session = Depends(get_db)):
         predicted_duration_min=pred_res["predicted_duration_min"],
         predicted_disruption_class=pred_res["predicted_disruption_class"],
         confidence_score=pred_res["confidence_score"],
+        prediction_transparency=prediction_transparency,
         model_version="v1.0"
     )
     db.add(db_pred)
@@ -100,6 +101,5 @@ def run_prediction(payload: PredictRequest, db: Session = Depends(get_db)):
     # 4. Attach transient fields for pydantic serialization
     db_pred.low_data_warning = pred_res["low_data_warning"]
     db_pred.warning_message = pred_res["warning_message"]
-    db_pred.prediction_transparency = prediction_transparency
 
     return db_pred
