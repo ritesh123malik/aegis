@@ -18,6 +18,7 @@ app = FastAPI(title="Aegis — Event Congestion Command System")
 # Configure CORS for frontend dev server
 origins = [
     "http://localhost:3000",
+    "https://aegis-lyart-ten.vercel.app",
 ]
 
 app.add_middleware(
